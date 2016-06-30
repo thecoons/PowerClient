@@ -6,7 +6,8 @@ from tkinter.filedialog import *
 from requests.auth import HTTPBasicAuth
 import requests
 import fileinput
-import sys,os
+import sys, os
+import time
 
 def alert():
     showinfo("alerte", "Bravo!")
@@ -21,8 +22,6 @@ def update_status():
         message.set(current_status)
         fenetre.after(1000,update_status)
 
-def stop():
-    message.set('STOP')
 
 def clickLogin():
     toplevel = Toplevel()
@@ -47,6 +46,7 @@ def clickLoginOut(window,username,password):
         connect.set(True)
         fenetre.title(username.get())
         message.set('Wellcome '+username.get()+"!")
+        loadConfig()
         print(listupload)
     else:
         connect.set(False)
@@ -58,17 +58,58 @@ def clickLoginOut(window,username,password):
 
 def clickConfig():
     dirname = askdirectory(title="Fichier log.config ")
-    message.set(dirname)
     if(dirname):
         listFileRep = os.listdir(dirname)
         checkList = ['Logs','Cache','options.txt']
         if(set(checkList)<set(listFileRep)):
-            rewrite_logconfig(path+'/log.config')
-            setConfigClient('LogsPath',path+'/Logs/')
-            logs_path.set(path+'/Logs/')
+            rewrite_logconfig(dirname+'/log.config')
+            setConfigClient('LogsPath',dirname+'/Logs/')
+            logs_path.set(dirname+'/Logs/')
             message.set("Config match and rewrite")
         else:
             message.set("Bad setting repository")
+
+def clickLunch(list_upload):
+    if(not power.get()):
+        power.set(True)
+        state.set("Online!")
+        check_send(list_upload)
+    else:
+        power.set(False)
+        state.set("Offline...")
+        message.set("Waiting")
+        update_status()
+
+
+def check_send(list_upload):
+    print("ClickLunch Call...")
+    list_in_rep = os.listdir(logs_path.get())
+    gen = [line for line in list_in_rep if line not in list_upload]
+    for line in gen:
+        last_touch = os.path.getmtime(logs_path.get()+line)
+        current_time = time.time()
+        inter_time = current_time - last_touch
+        print('ClickLunch Call: '+line+' '+str(last_touch)+' '+str(current_time)+' '+str(inter_time))
+        if(inter_time > 600):
+            send_log(line)
+            list_upload.append(line)
+
+    if not gen:
+        message.set('Nothing to send... yet')
+
+    if(power):
+        fenetre.after(1000*10,lambda : check_send(list_upload))
+
+def send_log(filename):
+        files = {'brutLog': open(logs_path.get()+filename, 'rb')}
+        res = requests.post('http://hearthdeep.lirmm.fr/api/hearthlog/', files=files,data={'filename':filename}, auth=HTTPBasicAuth(username.get(), password.get()))
+        print('SendLog: status_code req :'+ str(res.status_code))
+
+        if(res.status_code == 201):
+            message.set("Successful logs send !")
+        else:
+            message.set("Fail to send logs ...")
+
 
 def rewrite_logconfig(filename):
     logFile = open('config/log.config','r')
@@ -80,6 +121,11 @@ def setConfigClient(champs, valeur):
         if champs in line:
             line = champs+':'+valeur
         sys.stdout.write(line)
+
+def loadConfig():
+        f = open('config/hearthdeep.config','r')
+        match = re.match(r'^LogsPath:(.*)', f.read())
+        logs_path.set(match.group(1))
 
 fenetre = Tk()
 fenetre.title("HearthDeepClient")
@@ -102,6 +148,8 @@ listupload=[]
 state = StringVar()
 state.set("Offline...")
 logs_path = StringVar()
+power = BooleanVar()
+power.set(False)
 
 menubar = Menu(fenetre)
 
@@ -116,7 +164,7 @@ labelFrame = LabelFrame(fenetre, text="Informations",width=300, height=50)
 labelFrame.pack(side=LEFT, padx=5, pady=5, fill="both", expand="yes")
 label = Label(labelFrame,textvariable=message).pack(side=LEFT)
 Button(fenetre, text ='Configuration',command=clickConfig).pack(side=TOP, padx=5, pady=5)
-Button(fenetre, textvariable=state,command=stop).pack(side=BOTTOM, padx=5, pady=5)
+Button(fenetre, textvariable=state,command=lambda : clickLunch(listupload)).pack(side=BOTTOM, padx=5, pady=5)
 
 
 # Canvas(fenetre, width=250, height=50, bg='grey').pack(side=LEFT, padx=5, pady=5)
