@@ -98,7 +98,7 @@ def check_send(list_upload):
         current_time = time.time()
         inter_time = current_time - last_touch
         print('ClickLunch Call: '+line+' '+str(last_touch)+' '+str(current_time)+' '+str(inter_time))
-        if(inter_time > 600):
+        if(inter_time > 30000):
             send_log(line)
             list_upload.append(line)
 
